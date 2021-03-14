@@ -11,15 +11,12 @@ import "../util/AddressArrayLib.sol";
 // Interfaces
 import "@openzeppelin/contracts-ethereum-package/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts-ethereum-package/contracts/math/SafeMath.sol";
-import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "../interfaces/LendingPoolInterface.sol";
 import "../interfaces/LoansInterface.sol";
 import "../interfaces/IMarketRegistry.sol";
 
 // Contracts
 import "@openzeppelin/contracts-ethereum-package/contracts/utils/ReentrancyGuard.sol";
-import "compound-protocol/contracts/CToken.sol";
-import "compound-protocol/contracts/Comptroller.sol";
 import "./Base.sol";
 import "./TToken.sol";
 
@@ -42,7 +39,7 @@ import "./TToken.sol";
 contract LendingPool is LendingPoolInterface, Base, ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for ERC20Detailed;
-    using CompoundRatesLib for CToken;
+    using CompoundRatesLib for CErc20Interface;
     using NumbersLib for uint256;
 
     /** Constants */
@@ -58,11 +55,11 @@ contract LendingPool is LendingPoolInterface, Base, ReentrancyGuard {
 
     ERC20Detailed public lendingToken;
 
-    CToken public cToken;
+    CErc20Interface public cToken;
 
-    Comptroller public compound;
+    ComptrollerInterface public compound;
 
-    Comp public comp;
+    ERC20Detailed public comp;
 
     IMarketRegistry public marketRegistry;
 
@@ -402,9 +399,11 @@ contract LendingPool is LendingPoolInterface, Base, ReentrancyGuard {
         marketRegistry = aMarketRegistry;
         tToken = aTToken;
         lendingToken = tToken.underlying();
-        cToken = CToken(settings.getCTokenAddress(address(lendingToken)));
-        compound = Comptroller(cToken.comptroller());
-        comp = Comp(compound.getCompAddress());
+        cToken = CErc20Interface(
+            settings.getCTokenAddress(address(lendingToken))
+        );
+        compound = ComptrollerInterface(cToken.comptroller());
+        comp = ERC20Detailed(compound.getCompAddress());
     }
 
     /** Internal functions */
@@ -483,7 +482,7 @@ contract LendingPool is LendingPoolInterface, Base, ReentrancyGuard {
             _totalBorrowed.sub(_totalRepaid)
         );
 
-        CToken _cToken = cToken();
+        CErc20Interface _cToken = cToken;
         if (address(_cToken) != address(0)) {
             totalSupplied = totalSupplied.add(
                 _cToken.valueInUnderlying(_cToken.balanceOf(address(this)))
@@ -563,7 +562,7 @@ contract LendingPool is LendingPoolInterface, Base, ReentrancyGuard {
         internal
         returns (uint256 difference)
     {
-        CToken _cToken = cToken();
+        CErc20Interface _cToken = cToken;
         if (address(_cToken) == address(0)) {
             return 0;
         }
@@ -591,7 +590,7 @@ contract LendingPool is LendingPoolInterface, Base, ReentrancyGuard {
         internal
         returns (uint256)
     {
-        CToken _cToken = cToken();
+        CErc20Interface _cToken = cToken;
         if (address(_cToken) == address(0)) {
             return 0;
         }
@@ -620,13 +619,14 @@ contract LendingPool is LendingPoolInterface, Base, ReentrancyGuard {
         path[1] = settings.WETH_ADDRESS();
         path[2] = address(lendingToken);
 
-        comp.safeIncreaseAllowance(ROUTER, amountIn);
+        comp.safeIncreaseAllowance(address(ROUTER), amountIn);
 
-        ROUTER.swapExactTokensForToken(
+        ROUTER.swapExactTokensForTokens(
             amountIn,
             ROUTER.getAmountsOut(amountIn, path)[path.length - 1],
             path,
-            address(this)
+            address(this),
+            now
         );
     }
 
