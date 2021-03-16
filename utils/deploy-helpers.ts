@@ -1,7 +1,7 @@
-import { HardhatRuntimeEnvironment } from 'hardhat/types'
-import { Libraries } from 'hardhat-deploy/types'
 import { Contract } from 'ethers'
-
+import { getNamedSigner } from 'hardhat'
+import { Libraries } from 'hardhat-deploy/types'
+import { HardhatRuntimeEnvironment } from 'hardhat/types'
 import { DynamicProxy, SettingsDynamicProxy } from '../types/typechain'
 
 export interface DeployArgs {
@@ -80,13 +80,16 @@ interface DeploySettingsProxyArgs {
 export const deploySettingsProxy = async (
   args: DeploySettingsProxyArgs
 ): Promise<SettingsDynamicProxy> => {
+  const deployer = await getNamedSigner('deployer')
   const proxy = await deploy<SettingsDynamicProxy>({
     hre: args.hre,
     name: 'Settings',
     contract: 'SettingsDynamicProxy',
   })
 
-  const tx = await proxy.initializeLogicVersions(args.initialLogicVersions)
+  const tx = await proxy
+    .connect(deployer)
+    .initializeLogicVersions(args.initialLogicVersions)
   await tx.wait(1)
 
   return proxy
